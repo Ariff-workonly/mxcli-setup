@@ -36,15 +36,15 @@ const PLATFORM_MAP = {
 };
 
 function log(msg) {
-  console.log(`[mxcli-olc-setup] ${msg}`);
+  console.log(`[mxcli-setup-olc] ${msg}`);
 }
 
 function warn(msg) {
-  console.warn(`[mxcli-olc-setup] WARNING: ${msg}`);
+  console.warn(`[mxcli-setup-olc] WARNING: ${msg}`);
 }
 
 function fail(msg) {
-  console.error(`[mxcli-olc-setup] ERROR: ${msg}`);
+  console.error(`[mxcli-setup-olc] ERROR: ${msg}`);
   process.exit(1);
 }
 
@@ -56,8 +56,8 @@ function printHelp() {
   Automates mxcli setup for Mendix projects.
 
   Usage:
-    npx mxcli-olc-setup [project-path]
-    mxcli-olc-setup [project-path]
+    npx mxcli-setup-olc [project-path]
+    mxcli-setup-olc [project-path]
 
   Arguments:
     project-path    Path to the Mendix project root (default: current directory)
@@ -167,7 +167,7 @@ function downloadFile(url, destPath) {
           downloaded += chunk.length;
           if (total) {
             const pct = Math.round((downloaded / total) * 100);
-            process.stdout.write(`\r[mxcli-olc-setup] Downloading mxcli... ${pct}%`);
+            process.stdout.write(`\r[mxcli-setup-olc] Downloading mxcli... ${pct}%`);
           }
         });
         res.pipe(file);
@@ -393,6 +393,6 @@ async function main() {
 }
 
 main().catch(e => {
-  console.error(`[mxcli-olc-setup] FATAL: ${e.message}`);
+  console.error(`[mxcli-setup-olc] FATAL: ${e.message}`);
   process.exit(1);
 });

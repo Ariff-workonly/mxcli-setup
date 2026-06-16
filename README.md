@@ -1,4 +1,4 @@
-# mxcli-olc-setup
+# mxcli-setup-olc
 
 Automates [mxcli](https://github.com/mendixlabs/mxcli) setup for Mendix projects. Downloads the correct mxcli binary for your platform, initializes it with all supported AI tools, adds AI-agent skills, and sets up a shared knowledge base that AI agents maintain across sessions.
 
@@ -7,13 +7,13 @@ Automates [mxcli](https://github.com/mendixlabs/mxcli) setup for Mendix projects
 Run from your **Mendix project root**:
 
 ```bash
-npx mxcli-olc-setup
+npx mxcli-setup-olc
 ```
 
 Or with an explicit path:
 
 ```bash
-npx mxcli-olc-setup /path/to/mendix-project
+npx mxcli-setup-olc /path/to/mendix-project
 ```
 
 ## What It Does
@@ -37,7 +37,7 @@ This creates a persistent memory across AI sessions, so agents don't re-discover
 ## CLI Usage
 
 ```
-npx mxcli-olc-setup [project-path]
+npx mxcli-setup-olc [project-path]
 
 Arguments:
   project-path    Path to the Mendix project root (default: current directory)
@@ -50,8 +50,8 @@ Options:
 ## Global Install
 
 ```bash
-npm install -g mxcli-olc-setup
-mxcli-olc-setup
+npm install -g mxcli-setup-olc
+mxcli-setup-olc
 ```
 
 ## Prerequisites
