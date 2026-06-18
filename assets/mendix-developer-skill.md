@@ -174,18 +174,25 @@ Existing legacy styles that already target `.mx-name-*` selectors should not be 
 
 ## Project Knowledge Base
 
-A file named `project-knowledge-base.md` exists at the project root. This is a shared memory across AI sessions. You MUST update it whenever you learn something that would help a future AI agent (or yourself in a new session) work on this project.
+**Before reading or updating the knowledge base, check `olc-config.json` in the project root.** If `IsKeepKnowledgebase` is `false`, skip all knowledge base operations entirely.
 
-Update the knowledge base when you:
+A tiered knowledge base exists for this project:
 
-1. Discover a module's purpose or responsibility.
-2. Identify key domain entities and their relationships.
-3. Trace an important microflow or page navigation path.
-4. Find a gotcha, edge case, or non-obvious constraint.
-5. Make an architectural decision or observe an existing pattern.
-6. Complete any analysis that produced reusable findings.
+- `project-knowledge-base.md` — Summary index (read every session). Keep under 200 lines.
+- `knowledge-base/modules.md` — Module details.
+- `knowledge-base/entities.md` — Entity relationships.
+- `knowledge-base/microflows.md` — Microflow traces.
+- `knowledge-base/business-flow.md` — Business logic and process flows.
+- `knowledge-base/archive.md` — Old/resolved entries.
 
-When updating, add to the appropriate section (Module Map, Key Entities, Important Microflows, etc.). Add a dated entry under Change Log. Keep entries concise and factual. Do not remove existing entries unless they are confirmed wrong.
+Rules:
+
+1. Always read `project-knowledge-base.md` at the start of every session.
+2. Only load detail files when working on that specific area.
+3. Write new findings to the appropriate detail file, not the index.
+4. Update the index only with brief summaries and pointers.
+5. When the index exceeds 200 lines, compress or move entries to detail files.
+6. Move outdated entries to `knowledge-base/archive.md` instead of deleting.
 
 ## Git ignore
 

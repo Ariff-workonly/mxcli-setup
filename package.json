@@ -1,6 +1,6 @@
 {
   "name": "mxcli-setup-olc",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Automates mxcli setup for Mendix projects — downloads mxcli binary, runs init, adds custom skills, and configures gitignore",
   "bin": {
     "mxcli-setup-olc": "./setup.js"

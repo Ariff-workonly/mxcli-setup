@@ -1,6 +1,8 @@
 # Mendix Project Review Checklist
 
-This file is used by AI agents to review a completed Mendix project. When a developer requests a review, follow this checklist systematically against the `.mpr` model. Produce a structured review report at the end.
+This file is used by AI agents to review a completed Mendix project. **Before performing a review, check `olc-config.json` in the project root.** If `IsKeepReviewChecklist` is `false`, do not perform the review.
+
+When a developer requests a review, follow this checklist systematically against the `.mpr` model. Produce a structured review report at the end.
 
 ## How To Use
 

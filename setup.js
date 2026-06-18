@@ -23,6 +23,8 @@ const GITIGNORE_ENTRIES = [
   '/outputs/',
   '*.mdl',
   'project-knowledge-base.md',
+  '/knowledge-base/',
+  'olc-config.json',
   '/.tools/',
 ];
 
@@ -233,7 +235,7 @@ function runMxcliInit(binaryPath, projectRoot) {
   log('Running mxcli init...');
   try {
     const result = execSync(
-      `"${binaryPath}" init --all-tools "${projectRoot}"`,
+      `"${binaryPath}" init "${projectRoot}"`,
       { encoding: 'utf8', stdio: 'pipe', cwd: projectRoot }
     );
     log('mxcli init completed successfully');
@@ -244,16 +246,20 @@ function runMxcliInit(binaryPath, projectRoot) {
   }
 }
 
-function addCustomSkills(projectRoot) {
+function addCustomSkills(projectRoot, config) {
   const skillDir = path.join(projectRoot, '.ai-context', 'skills');
   fs.mkdirSync(skillDir, { recursive: true });
 
   const skills = [
-    { file: 'mendix-developer-skill.md', label: 'Mendix Developer Skill' },
-    { file: 'mendix-review-checklist.md', label: 'Mendix Review Checklist' },
+    { file: 'mendix-developer-skill.md', label: 'Mendix Developer Skill', always: true },
+    { file: 'mendix-review-checklist.md', label: 'Mendix Review Checklist', always: false },
   ];
 
-  for (const { file, label } of skills) {
+  for (const { file, label, always } of skills) {
+    if (!always && !config.IsKeepReviewChecklist) {
+      log(`${label} disabled via olc-config.json, skipping`);
+      continue;
+    }
     const src = path.join(__dirname, 'assets', file);
     if (!fs.existsSync(src)) {
       warn(`${label} file not found at ${src}, skipping`);
@@ -294,16 +300,13 @@ function updateGitignore(projectRoot) {
 
 function createKnowledgeBase(projectRoot) {
   const kbPath = path.join(projectRoot, 'project-knowledge-base.md');
+  const kbDir = path.join(projectRoot, 'knowledge-base');
 
-  if (fs.existsSync(kbPath)) {
-    log('project-knowledge-base.md already exists, skipping');
-    return;
-  }
+  if (!fs.existsSync(kbPath)) {
+    const index = `# Mendix Project Knowledge Base
 
-  const header = `# Mendix Project Knowledge Base
-
-> This file is maintained by AI agents working on this project.
-> Every time an AI agent makes observations or discovers important context about the project, it should update this file for future reference.
+> This is the **summary index** — read this every session. Keep it under 200 lines.
+> Detailed findings go in the \`knowledge-base/\` folder. Only load detail files when working on that area.
 
 ## Project Overview
 
@@ -317,41 +320,108 @@ function createKnowledgeBase(projectRoot) {
 
 <!-- List modules and their responsibilities -->
 
-## Key Entities
-
-<!-- Document important domain entities and their relationships -->
-
-## Important Microflows
-
-<!-- List critical microflows and what they do -->
-
-## Known Issues / Gotchas
-
-<!-- Document pitfalls, edge cases, and things to watch out for -->
-
 ## Change Log
 
 <!-- Agents: add dated entries when you discover or change something important -->
 `;
+    fs.writeFileSync(kbPath, index, 'utf8');
+    log('Created project-knowledge-base.md (summary index)');
+  } else {
+    log('project-knowledge-base.md already exists, skipping');
+  }
 
-  fs.writeFileSync(kbPath, header, 'utf8');
-  log('Created project-knowledge-base.md');
+  fs.mkdirSync(kbDir, { recursive: true });
+
+  const detailFiles = [
+    {
+      file: 'modules.md',
+      content: `# Module Details
+
+> Detailed documentation of each module's purpose, responsibilities, and dependencies.
+> Only read this file when working on module structure or organization.
+
+<!-- Agents: add module documentation here as you discover it -->
+`,
+    },
+    {
+      file: 'entities.md',
+      content: `# Entity Relationships
+
+> Detailed documentation of domain entities, attributes, and associations.
+> Only read this file when working on the domain model.
+
+<!-- Agents: add entity documentation here as you discover it -->
+`,
+    },
+    {
+      file: 'microflows.md',
+      content: `# Important Microflows
+
+> Detailed traces and documentation of critical microflows.
+> Only read this file when working on microflow logic.
+
+<!-- Agents: add microflow traces and documentation here -->
+`,
+    },
+    {
+      file: 'business-flow.md',
+      content: `# Business Flow
+
+> Documentation of business logic, workflows, rules, and process flows.
+> Only read this file when working on business requirements or logic.
+
+<!-- Agents: document business rules, decision logic, approval flows, and process steps here -->
+`,
+    },
+    {
+      file: 'archive.md',
+      content: `# Knowledge Base Archive
+
+> Old or resolved entries moved here from the main knowledge base or detail files.
+> Only read this file if you need historical context.
+
+<!-- Agents: move outdated entries here instead of deleting them -->
+`,
+    },
+  ];
+
+  for (const { file, content } of detailFiles) {
+    const filePath = path.join(kbDir, file);
+    if (fs.existsSync(filePath)) continue;
+    fs.writeFileSync(filePath, content, 'utf8');
+  }
+  log('Created knowledge-base/ detail files (modules, entities, microflows, business-flow, archive)');
 }
 
 const KNOWLEDGE_BASE_NOTICE = `
 
 ## Project Knowledge Base
 
-A shared knowledge base exists at \`project-knowledge-base.md\` in the project root. This file persists across AI sessions.
+**Before reading or updating the knowledge base, check \`olc-config.json\` in the project root.** If \`IsKeepKnowledgebase\` is \`false\`, skip all knowledge base operations — do not read, update, or reference the knowledge base files.
 
-**You MUST update it** when you discover new information about the project — module purposes, entity relationships, microflow traces, architectural patterns, gotchas, or any findings that would help a future agent. Add a dated entry under the Change Log section.
+A tiered knowledge base exists for this project:
 
-Read this file at the start of every session to understand what previous agents have already learned.
+- \`project-knowledge-base.md\` — **Summary index (read every session).** Keep under 200 lines.
+- \`knowledge-base/modules.md\` — Module details. Read when working on module structure.
+- \`knowledge-base/entities.md\` — Entity relationships. Read when working on the domain model.
+- \`knowledge-base/microflows.md\` — Microflow traces. Read when working on microflow logic.
+- \`knowledge-base/business-flow.md\` — Business logic and process flows. Read when working on business requirements.
+- \`knowledge-base/archive.md\` — Old/resolved entries. Read only for historical context.
+
+**Rules:**
+1. Always read \`project-knowledge-base.md\` at the start of every session.
+2. Only load detail files when working on that specific area.
+3. Write new findings to the appropriate detail file, not the index.
+4. Update the index only with brief summaries and pointers.
+5. When the index exceeds 200 lines, compress or move entries to detail files.
+6. Move outdated entries to \`knowledge-base/archive.md\` instead of deleting.
 `;
 
 const REVIEW_CHECKLIST_NOTICE = `
 
 ## Project Review
+
+**Before performing a review, check \`olc-config.json\` in the project root.** If \`IsKeepReviewChecklist\` is \`false\`, do not perform the review.
 
 When asked to review this Mendix project, follow the checklist at \`.ai-context/skills/mendix-review-checklist.md\`. Inspect the \`.mpr\` model against each section and produce a structured report with PASS/WARN/FAIL/SKIP verdicts. Save the report to \`outputs/review-report-<date>.md\`.
 `;
@@ -387,6 +457,33 @@ function appendKnowledgeBaseNotice(projectRoot) {
 
     fs.appendFileSync(filePath, KNOWLEDGE_BASE_NOTICE, 'utf8');
     log(`Added knowledge base instructions to ${filename}`);
+  }
+}
+
+function loadConfig(projectRoot) {
+  const configPath = path.join(projectRoot, 'olc-config.json');
+  const defaultConfig = path.join(__dirname, 'assets', 'olc-config.json');
+
+  if (!fs.existsSync(configPath)) {
+    if (fs.existsSync(defaultConfig)) {
+      fs.copyFileSync(defaultConfig, configPath);
+      log('Created olc-config.json with default settings');
+    } else {
+      fs.writeFileSync(configPath, JSON.stringify({
+        IsKeepKnowledgebase: true,
+        IsKeepReviewChecklist: true,
+      }, null, 2) + '\n', 'utf8');
+      log('Created olc-config.json with default settings');
+    }
+  }
+
+  try {
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    log(`Config loaded: IsKeepKnowledgebase=${config.IsKeepKnowledgebase}, IsKeepReviewChecklist=${config.IsKeepReviewChecklist}`);
+    return config;
+  } catch (e) {
+    warn(`Failed to parse olc-config.json: ${e.message}, using defaults`);
+    return { IsKeepKnowledgebase: true, IsKeepReviewChecklist: true };
   }
 }
 
@@ -428,15 +525,24 @@ async function main() {
 
   runMxcliInit(binaryPath, projectRoot);
 
-  addCustomSkills(projectRoot);
+  const config = loadConfig(projectRoot);
+
+  addCustomSkills(projectRoot, config);
 
   updateGitignore(projectRoot);
 
-  createKnowledgeBase(projectRoot);
+  if (config.IsKeepKnowledgebase) {
+    createKnowledgeBase(projectRoot);
+    appendKnowledgeBaseNotice(projectRoot);
+  } else {
+    log('Knowledge base disabled via olc-config.json, skipping');
+  }
 
-  appendKnowledgeBaseNotice(projectRoot);
-
-  appendReviewChecklistNotice(projectRoot);
+  if (config.IsKeepReviewChecklist) {
+    appendReviewChecklistNotice(projectRoot);
+  } else {
+    log('Review checklist notice disabled via olc-config.json, skipping');
+  }
 
   log('Setup complete!');
 }
