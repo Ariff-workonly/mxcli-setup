@@ -20,10 +20,10 @@ npx mxcli-setup-olc /path/to/mendix-project
 
 1. **Downloads mxcli** — fetches the latest release binary for your OS/architecture into `.tools/mxcli/`
 2. **Runs `mxcli init --all-tools`** — initializes mxcli with all supported AI tools (Claude, OpenCode, Cursor, Windsurf, Continue.dev, Aider)
-3. **Adds Mendix Developer Skill** — copies the AI skill file to `.ai-context/skills/` with guardrails for `.mpr` inspection, microflow tracing, SCSS conventions, and more
+3. **Adds AI skills** — copies the Mendix Developer Skill and Mendix Review Checklist to `.ai-context/skills/` with guardrails for `.mpr` inspection, microflow tracing, SCSS conventions, and more
 4. **Updates `.gitignore`** — appends entries for AI/mxcli generated files
 5. **Creates knowledge base** — generates a `project-knowledge-base.md` template where AI agents document what they learn about the project
-6. **Wires up knowledge base instructions** — appends instructions to `AGENTS.md` and `CLAUDE.md` telling AI agents to read and update the knowledge base every session
+6. **Wires up agent instructions** — appends knowledge base and review checklist instructions to `AGENTS.md` and `CLAUDE.md`
 
 ## How the Knowledge Base Works
 
@@ -33,6 +33,28 @@ After setup, a `project-knowledge-base.md` file lives at the project root. AI ag
 - **Update it** when they find new information — module purposes, entity relationships, microflow traces, architectural patterns, gotchas
 
 This creates a persistent memory across AI sessions, so agents don't re-discover the same things.
+
+## Project Review
+
+After setup, AI agents can review a completed Mendix project against a standardized checklist. Simply ask the agent:
+
+> "Review this project"
+
+The agent reads the review checklist from `.ai-context/skills/mendix-review-checklist.md` and inspects the `.mpr` model across 9 categories:
+
+1. **Module Structure** — responsibility, naming, dependencies
+2. **Domain Model** — entities, attributes, associations
+3. **Microflow Quality** — naming conventions, logic, performance
+4. **Page and UI Quality** — structure, widgets, SCSS
+5. **Security** — access rules, least privilege, XPath constraints
+6. **Navigation** — menu structure, role-based visibility
+7. **Integration** — REST/SOAP error handling, credential storage
+8. **Documentation** — knowledge base completeness
+9. **Git hygiene** — gitignore, commit quality
+
+Each check produces a **PASS / WARN / FAIL / SKIP** verdict. The agent generates a structured report saved to `outputs/review-report-<date>.md`.
+
+The review checklist can be updated in `assets/mendix-review-checklist.md` to reflect evolving team standards.
 
 ## CLI Usage
 

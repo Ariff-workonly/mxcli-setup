@@ -69,7 +69,7 @@ function printHelp() {
   What it does:
     1. Downloads the latest mxcli binary for your platform
     2. Runs mxcli init with all supported AI tools
-    3. Adds the Mendix Developer Skill to .ai-context/skills/
+    3. Adds the Mendix Developer Skill and Review Checklist to .ai-context/skills/
     4. Appends AI/mxcli entries to .gitignore
     5. Creates a project-knowledge-base.md template
     6. Wires up knowledge base instructions in AGENTS.md and CLAUDE.md
@@ -245,19 +245,24 @@ function runMxcliInit(binaryPath, projectRoot) {
   }
 }
 
-function addCustomSkill(projectRoot) {
-  const skillSrc = path.join(__dirname, 'assets', 'mendix-developer-skill.md');
+function addCustomSkills(projectRoot) {
   const skillDir = path.join(projectRoot, '.ai-context', 'skills');
-  const skillDest = path.join(skillDir, 'mendix-developer-skill.md');
-
-  if (!fs.existsSync(skillSrc)) {
-    warn(`Custom skill file not found at ${skillSrc}, skipping`);
-    return;
-  }
-
   fs.mkdirSync(skillDir, { recursive: true });
-  fs.copyFileSync(skillSrc, skillDest);
-  log('Custom Mendix Developer Skill added to .ai-context/skills/');
+
+  const skills = [
+    { file: 'mendix-developer-skill.md', label: 'Mendix Developer Skill' },
+    { file: 'mendix-review-checklist.md', label: 'Mendix Review Checklist' },
+  ];
+
+  for (const { file, label } of skills) {
+    const src = path.join(__dirname, 'assets', file);
+    if (!fs.existsSync(src)) {
+      warn(`${label} file not found at ${src}, skipping`);
+      continue;
+    }
+    fs.copyFileSync(src, path.join(skillDir, file));
+    log(`${label} added to .ai-context/skills/`);
+  }
 }
 
 function updateGitignore(projectRoot) {
@@ -345,6 +350,30 @@ A shared knowledge base exists at \`project-knowledge-base.md\` in the project r
 Read this file at the start of every session to understand what previous agents have already learned.
 `;
 
+const REVIEW_CHECKLIST_NOTICE = `
+
+## Project Review
+
+When asked to review this Mendix project, follow the checklist at \`.ai-context/skills/mendix-review-checklist.md\`. Inspect the \`.mpr\` model against each section and produce a structured report with PASS/WARN/FAIL/SKIP verdicts. Save the report to \`outputs/review-report-<date>.md\`.
+`;
+
+function appendReviewChecklistNotice(projectRoot) {
+  const targets = ['AGENTS.md', 'CLAUDE.md'];
+  for (const filename of targets) {
+    const filePath = path.join(projectRoot, filename);
+    if (!fs.existsSync(filePath)) continue;
+
+    const content = fs.readFileSync(filePath, 'utf8');
+    if (content.includes('mendix-review-checklist.md')) {
+      log(`${filename} already references review checklist, skipping`);
+      continue;
+    }
+
+    fs.appendFileSync(filePath, REVIEW_CHECKLIST_NOTICE, 'utf8');
+    log(`Added review checklist instructions to ${filename}`);
+  }
+}
+
 function appendKnowledgeBaseNotice(projectRoot) {
   const targets = ['AGENTS.md', 'CLAUDE.md'];
   for (const filename of targets) {
@@ -381,13 +410,15 @@ async function main() {
 
   runMxcliInit(binaryPath, projectRoot);
 
-  addCustomSkill(projectRoot);
+  addCustomSkills(projectRoot);
 
   updateGitignore(projectRoot);
 
   createKnowledgeBase(projectRoot);
 
   appendKnowledgeBaseNotice(projectRoot);
+
+  appendReviewChecklistNotice(projectRoot);
 
   log('Setup complete!');
 }
