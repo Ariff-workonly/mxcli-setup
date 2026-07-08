@@ -4,16 +4,19 @@ Automates [mxcli](https://github.com/mendixlabs/mxcli) setup for Mendix projects
 
 ## Quick Start
 
-Run from your **Mendix project root**:
+Double-click **`mxcli-setup-olc.bat`** (or run it from a terminal). It will ask for the location of your Mendix project:
 
-```bash
-npx mxcli-setup-olc
+```
+Enter the location of your Mendix project
+(e.g. C:\Users\YourName\Mendix\MyProject):
 ```
 
-Or with an explicit path:
+Paste or type the project path and press Enter — the setup runs automatically from there.
 
-```bash
-npx mxcli-setup-olc /path/to/mendix-project
+You can also pass the path directly to skip the prompt:
+
+```bat
+mxcli-setup-olc.bat "C:\Users\YourName\Mendix\MyProject"
 ```
 
 ## What It Does
@@ -92,21 +95,16 @@ The review checklist can be updated in `assets/mendix-review-checklist.md` to re
 ## CLI Usage
 
 ```
-npx mxcli-setup-olc [project-path]
+mxcli-setup-olc.bat [project-path]
+node setup.js [project-path]
 
 Arguments:
-  project-path    Path to the Mendix project root (default: current directory)
+  project-path    Path to the Mendix project root
+                  (if omitted, you will be prompted for it)
 
 Options:
   --help, -h      Show help
   --version, -v   Show version
-```
-
-## Global Install
-
-```bash
-npm install -g mxcli-setup-olc
-mxcli-setup-olc
 ```
 
 ## Prerequisites

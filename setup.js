@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
+const readline = require('readline');
 
 const GITIGNORE_ENTRIES = [
   '.ai-context',
@@ -58,11 +59,12 @@ function printHelp() {
   Automates mxcli setup for Mendix projects.
 
   Usage:
-    npx mxcli-setup-olc [project-path]
-    mxcli-setup-olc [project-path]
+    mxcli-setup-olc.bat [project-path]
+    node setup.js [project-path]
 
   Arguments:
-    project-path    Path to the Mendix project root (default: current directory)
+    project-path    Path to the Mendix project root
+                    (if omitted, you will be prompted for it)
 
   Options:
     --help, -h      Show this help message
@@ -94,10 +96,56 @@ function parseArgs() {
   return args.find(a => !a.startsWith('-')) || null;
 }
 
-function getProjectRoot() {
+function askQuestion(question) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
+
+async function promptForProjectRoot() {
+  while (true) {
+    let answer = await askQuestion(
+      '\nEnter the location of your Mendix project\n' +
+      '(e.g. C:\\Users\\YourName\\Mendix\\MyProject): '
+    );
+    answer = answer.trim().replace(/^["']|["']$/g, '');
+
+    if (!answer) {
+      console.log('Please enter a path.');
+      continue;
+    }
+
+    const resolved = path.resolve(answer);
+
+    if (!fs.existsSync(resolved)) {
+      console.log(`Path does not exist: ${resolved}\nPlease try again.`);
+      continue;
+    }
+    if (!fs.statSync(resolved).isDirectory()) {
+      console.log(`Path is not a folder: ${resolved}\nPlease try again.`);
+      continue;
+    }
+
+    const hasMpr = fs.readdirSync(resolved).some(f => f.toLowerCase().endsWith('.mpr'));
+    if (!hasMpr) {
+      const confirm = await askQuestion(
+        `No .mpr file found in ${resolved} — this may not be a Mendix project root.\nContinue anyway? (y/N): `
+      );
+      if (confirm.trim().toLowerCase() !== 'y') continue;
+    }
+
+    return resolved;
+  }
+}
+
+async function getProjectRoot() {
   const cliPath = parseArgs();
   if (cliPath) return path.resolve(cliPath);
-  return process.env.INIT_CWD || process.cwd();
+  return promptForProjectRoot();
 }
 
 function getPlatformKey() {
@@ -507,7 +555,7 @@ function printBanner() {
 
 async function main() {
   printBanner();
-  const projectRoot = getProjectRoot();
+  const projectRoot = await getProjectRoot();
   log(`Project root: ${projectRoot}`);
   log(`Platform: ${os.platform()} ${os.arch()}`);
 
