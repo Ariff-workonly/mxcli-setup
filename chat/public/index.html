@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mxgpt by Orangeleaf Consulting — Mendix project chat</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧩</text></svg>"
+    />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">🧩</span>
+        <div class="brand-text">
+          <span class="title">mxgpt</span>
+          <span class="byline">by Orangeleaf Consulting</span>
+        </div>
+      </div>
+
+      <nav class="tabs">
+        <button class="tab active" data-tab="chat">Chat</button>
+        <button class="tab" data-tab="logs">
+          Logs <span class="badge" id="log-badge" hidden>0</span>
+        </button>
+      </nav>
+
+      <div class="meta" id="meta"></div>
+    </header>
+
+    <main class="views">
+      <!-- Chat view -->
+      <section id="view-chat" class="view active">
+        <div id="chat" class="chat">
+          <div class="welcome" id="welcome">
+            <h1>Ask about your Mendix project</h1>
+            <p>mxgpt inspects your model with <code>mxcli</code> and answers technical questions.</p>
+            <div class="examples" id="examples">
+              <button class="example">Can a Mechanic belong to more than one Workshop?</button>
+              <button class="example">List all modules and their entities.</button>
+              <button class="example">Which microflows have the most activities?</button>
+              <button class="example">What associations does the Customer entity have?</button>
+            </div>
+          </div>
+        </div>
+
+        <footer class="composer">
+          <form id="form">
+            <textarea
+              id="input"
+              rows="1"
+              placeholder="Ask a question about this Mendix project…"
+              autofocus
+            ></textarea>
+            <button id="send" type="submit" aria-label="Send">↑</button>
+          </form>
+          <div class="hint">Enter to send · Shift+Enter for newline</div>
+        </footer>
+      </section>
+
+      <!-- Logs view -->
+      <section id="view-logs" class="view">
+        <div class="logs-toolbar">
+          <span>Activity log — what the AI and <code>mxcli</code> are doing behind the scenes</span>
+          <button id="clear-logs" type="button">Clear</button>
+        </div>
+        <div id="logs" class="logs">
+          <div class="logs-empty">No activity yet. Ask a question to see the AI work here.</div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Lightbox for enlarging a rendered diagram -->
+    <div id="lightbox" class="lightbox" hidden>
+      <div class="lightbox-inner">
+        <button class="lightbox-close" id="lightbox-close" aria-label="Close">✕</button>
+        <div class="lightbox-stage" id="lightbox-stage"></div>
+      </div>
+    </div>
+
+    <script src="/vendor/mermaid.min.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

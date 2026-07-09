@@ -5,7 +5,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { execSync } = require('child_process');
+const { execSync, spawnSync } = require('child_process');
 const readline = require('readline');
 
 const GITIGNORE_ENTRIES = [
@@ -27,6 +27,7 @@ const GITIGNORE_ENTRIES = [
   '/knowledge-base/',
   'olc-config.json',
   '/.tools/',
+  '.mxgpt.json',
 ];
 
 const PLATFORM_MAP = {
@@ -71,7 +72,8 @@ function printHelp() {
     --version, -v   Show version number
 
   What it does:
-    1. Downloads the latest mxcli binary for your platform
+    1. Installs mxcli (reuses a copy from a sibling project if found,
+       otherwise downloads the latest binary for your platform)
     2. Runs mxcli init with all supported AI tools
     3. Adds the Mendix Developer Skill and Review Checklist to .ai-context/skills/
     4. Appends AI/mxcli entries to .gitignore
@@ -244,20 +246,74 @@ function findAsset(release, platformKey) {
   return asset;
 }
 
-async function downloadMxcli(projectRoot, release, platformKey) {
+function verifyBinary(binaryPath) {
+  try {
+    const result = execSync(`"${binaryPath}" --version`, { encoding: 'utf8', stdio: 'pipe' });
+    return result.trim();
+  } catch (e) {
+    return null;
+  }
+}
+
+function findMxcliInSiblingProjects(projectRoot, binaryName) {
+  const parentDir = path.dirname(projectRoot);
+  let entries;
+  try {
+    entries = fs.readdirSync(parentDir, { withFileTypes: true });
+  } catch (e) {
+    return null;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const siblingRoot = path.join(parentDir, entry.name);
+    if (path.resolve(siblingRoot) === path.resolve(projectRoot)) continue;
+
+    const candidate = path.join(siblingRoot, '.tools', 'mxcli', binaryName);
+    if (!fs.existsSync(candidate)) continue;
+
+    const version = verifyBinary(candidate);
+    if (version) {
+      return { path: candidate, version };
+    }
+    warn(`Found mxcli at ${candidate} but it failed --version check, ignoring`);
+  }
+  return null;
+}
+
+async function installMxcli(projectRoot, platformKey) {
   const { binaryName } = PLATFORM_MAP[platformKey];
   const installDir = path.join(projectRoot, '.tools', 'mxcli');
   const binaryPath = path.join(installDir, binaryName);
 
   if (fs.existsSync(binaryPath)) {
     log(`mxcli binary already exists at ${binaryPath}`);
-    try {
-      const result = execSync(`"${binaryPath}" --version`, { encoding: 'utf8', stdio: 'pipe' });
-      log(`Existing mxcli version: ${result.trim()}`);
+    const version = verifyBinary(binaryPath);
+    if (version) {
+      log(`Existing mxcli version: ${version}`);
       return binaryPath;
-    } catch (e) {
-      warn('Existing binary failed --version check, will re-download');
     }
+    warn('Existing binary failed --version check, will look for another copy');
+  }
+
+  const existing = findMxcliInSiblingProjects(projectRoot, binaryName);
+  if (existing) {
+    log(`Found existing mxcli in another project: ${existing.path} (${existing.version})`);
+    fs.mkdirSync(installDir, { recursive: true });
+    fs.copyFileSync(existing.path, binaryPath);
+    if (os.platform() !== 'win32') {
+      fs.chmodSync(binaryPath, 0o755);
+    }
+    log(`Copied mxcli to ${binaryPath} — no download needed`);
+    return binaryPath;
+  }
+
+  let release;
+  try {
+    release = await getLatestRelease();
+    log(`Latest mxcli release: ${release.tag_name}`);
+  } catch (e) {
+    fail(`Failed to fetch mxcli release info: ${e.message}`);
   }
 
   fs.mkdirSync(installDir, { recursive: true });
@@ -553,6 +609,110 @@ function printBanner() {
 `);
 }
 
+/**
+ * Resolve a command name to an absolute executable path. `where` on Windows
+ * can return several candidates (e.g. an extension-less shell shim AND a
+ * .cmd/.exe) — Node cannot spawn the extension-less shim, so prefer a
+ * launchable extension.
+ */
+function resolveCommand(cmd) {
+  const finder = os.platform() === 'win32' ? 'where' : 'which';
+  const res = spawnSync(finder, [cmd], { encoding: 'utf8' });
+  if (res.status !== 0 || !res.stdout) return null;
+  const lines = res.stdout.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return null;
+  if (os.platform() !== 'win32') return lines[0];
+
+  const priority = ['.exe', '.cmd', '.bat', '.com'];
+  for (const ext of priority) {
+    const hit = lines.find(l => l.toLowerCase().endsWith(ext));
+    if (hit) return hit;
+  }
+  return lines[0];
+}
+
+function launchClaude(projectRoot, initialPrompt) {
+  const resolved = resolveCommand('claude');
+  if (!resolved) {
+    warn('Claude Code CLI not found on this machine.');
+    log('Install it from https://claude.com/claude-code, then run from the project folder:');
+    log(initialPrompt ? `  claude "${initialPrompt}"` : '  claude');
+    return;
+  }
+
+  log(`Launching Claude Code in ${projectRoot}...`);
+  const lower = resolved.toLowerCase();
+  const isShim = lower.endsWith('.cmd') || lower.endsWith('.bat');
+  let result;
+  if (isShim) {
+    // .cmd/.bat must go through a shell, and Node does not quote args when
+    // shell:true — build the command line ourselves.
+    const promptArg = initialPrompt ? ` "${initialPrompt.replace(/"/g, '')}"` : '';
+    result = spawnSync(`"${resolved}"${promptArg}`, {
+      cwd: projectRoot,
+      stdio: 'inherit',
+      shell: true,
+    });
+  } else {
+    result = spawnSync(resolved, initialPrompt ? [initialPrompt] : [], {
+      cwd: projectRoot,
+      stdio: 'inherit',
+    });
+  }
+  if (result.error) {
+    warn(`Failed to launch Claude Code: ${result.error.message}`);
+  }
+}
+
+function launchChatWebApp(projectRoot) {
+  // Built-in local chat web app (ported from mxgpt) — serves the chat UI on
+  // localhost and auto-opens the browser. Press Ctrl+C to stop it.
+  log('Starting the local chat web app — press Ctrl+C to stop it...');
+  const serverPath = path.join(__dirname, 'chat', 'server.js');
+  const result = spawnSync(process.execPath, [serverPath, projectRoot], {
+    cwd: projectRoot,
+    stdio: 'inherit',
+  });
+  if (result.error) {
+    warn(`Failed to start the chat web app: ${result.error.message}`);
+  }
+}
+
+async function postSetupMenu(projectRoot) {
+  console.log(`
+What would you like to do next?
+
+  1) Review branch
+  2) Open direct chat interface (local web app)
+  3) Development / Analysis / others
+`);
+
+  const answer = (await askQuestion('Select an option (1-3, press Enter to skip): ')).trim();
+
+  switch (answer) {
+    case '1':
+      launchClaude(
+        projectRoot,
+        'Review this branch: follow the checklist at .ai-context/skills/mendix-review-checklist.md, ' +
+        'scoped to the changes on the current branch, and save the report to outputs/review-report-<date>.md'
+      );
+      break;
+    case '2':
+      launchChatWebApp(projectRoot);
+      break;
+    case '3': {
+      const task = (await askQuestion('Describe what you want to do (Enter for a blank session): ')).trim();
+      launchClaude(projectRoot, task || null);
+      break;
+    }
+    case '':
+      log('Skipping — you can run "claude" from the project folder anytime.');
+      break;
+    default:
+      log(`Unknown option "${answer}", skipping — you can run "claude" from the project folder anytime.`);
+  }
+}
+
 async function main() {
   printBanner();
   const projectRoot = await getProjectRoot();
@@ -561,15 +721,11 @@ async function main() {
 
   const platformKey = getPlatformKey();
 
-  let release;
-  try {
-    release = await getLatestRelease();
-    log(`Latest mxcli release: ${release.tag_name}`);
-  } catch (e) {
-    fail(`Failed to fetch mxcli release info: ${e.message}`);
-  }
+  // olc-config.json is always created by this tool, so its absence means
+  // this project has never been set up before.
+  const isFirstRun = !fs.existsSync(path.join(projectRoot, 'olc-config.json'));
 
-  const binaryPath = await downloadMxcli(projectRoot, release, platformKey);
+  const binaryPath = await installMxcli(projectRoot, platformKey);
 
   runMxcliInit(binaryPath, projectRoot);
 
@@ -593,6 +749,10 @@ async function main() {
   }
 
   log('Setup complete!');
+
+  if (isFirstRun) {
+    await postSetupMenu(projectRoot);
+  }
 }
 
 main().catch(e => {

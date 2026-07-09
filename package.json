@@ -8,6 +8,7 @@
   "files": [
     "setup.js",
     "assets/",
+    "chat/",
     "README.md"
   ],
   "engines": {
