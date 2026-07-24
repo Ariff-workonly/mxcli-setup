@@ -79,6 +79,10 @@ function printHelp() {
     4. Appends AI/mxcli entries to .gitignore
     5. Creates a project-knowledge-base.md template
     6. Wires up knowledge base instructions in AGENTS.md and CLAUDE.md
+
+  The post-setup menu also offers a Clean up option that deletes all
+  files created by this tool plus anything listed in the project's
+  .gitignore (with a confirmation prompt).
 `);
 }
 
@@ -678,6 +682,112 @@ function launchChatWebApp(projectRoot) {
   }
 }
 
+function parseGitignorePatterns(projectRoot) {
+  const gitignorePath = path.join(projectRoot, '.gitignore');
+  if (!fs.existsSync(gitignorePath)) return [];
+  return fs.readFileSync(gitignorePath, 'utf8')
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('#') && !l.startsWith('!'));
+}
+
+/**
+ * Convert a gitignore-style pattern to matching info.
+ * Supports the common cases: plain names, leading "/" (root-anchored),
+ * trailing "/" (directory-only), and "*" / "?" wildcards.
+ */
+function patternToMatcher(pattern) {
+  let pat = pattern;
+  const dirOnly = pat.endsWith('/');
+  if (dirOnly) pat = pat.slice(0, -1);
+  const anchored = pat.startsWith('/');
+  if (anchored) pat = pat.slice(1);
+  const hasSlash = pat.includes('/');
+
+  const regexBody = pat
+    .split('')
+    .map(ch => {
+      if (ch === '*') return '[^/]*';
+      if (ch === '?') return '[^/]';
+      return ch.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    })
+    .join('');
+  const regex = new RegExp(`^${regexBody}$`, os.platform() === 'win32' ? 'i' : '');
+
+  return { regex, dirOnly, anchored: anchored || hasSlash };
+}
+
+function collectCleanupTargets(projectRoot, patterns) {
+  const matchers = patterns.map(patternToMatcher);
+  const targets = [];
+
+  function walk(dir, relPrefix) {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (_) {
+      return;
+    }
+    for (const entry of entries) {
+      if (relPrefix === '' && (entry.name === '.git' || entry.name === '.gitignore')) continue;
+      const relPath = relPrefix ? `${relPrefix}/${entry.name}` : entry.name;
+      const fullPath = path.join(dir, entry.name);
+      const isDir = entry.isDirectory();
+
+      const matched = matchers.some(m => {
+        if (m.dirOnly && !isDir) return false;
+        const candidate = m.anchored ? relPath : entry.name;
+        return m.regex.test(candidate);
+      });
+
+      if (matched) {
+        targets.push({ relPath, fullPath, isDir });
+        continue; // no need to recurse into a directory that will be deleted whole
+      }
+      if (isDir) walk(fullPath, relPath);
+    }
+  }
+
+  walk(projectRoot, '');
+  return targets;
+}
+
+async function cleanupProject(projectRoot) {
+  const gitignorePatterns = parseGitignorePatterns(projectRoot);
+  const patterns = [...new Set([...GITIGNORE_ENTRIES, ...gitignorePatterns])];
+
+  log('Scanning for files created by this tool and entries listed in .gitignore...');
+  const targets = collectCleanupTargets(projectRoot, patterns);
+
+  if (targets.length === 0) {
+    log('Nothing to clean up — no matching files or folders found.');
+    return;
+  }
+
+  console.log('\nThe following will be PERMANENTLY deleted:\n');
+  for (const t of targets.sort((a, b) => a.relPath.localeCompare(b.relPath))) {
+    console.log(`  ${t.isDir ? '[dir] ' : '[file]'} ${t.relPath}`);
+  }
+  console.log(`\nTotal: ${targets.length} item(s) in ${projectRoot}`);
+
+  const confirm = await askQuestion('\nAre you sure you want to delete all of the above? (y/N): ');
+  if (confirm.trim().toLowerCase() !== 'y') {
+    log('Cleanup cancelled — nothing was deleted.');
+    return;
+  }
+
+  let deleted = 0;
+  for (const t of targets) {
+    try {
+      fs.rmSync(t.fullPath, { recursive: true, force: true });
+      deleted++;
+    } catch (e) {
+      warn(`Failed to delete ${t.relPath}: ${e.message}`);
+    }
+  }
+  log(`Cleanup complete — deleted ${deleted} of ${targets.length} item(s).`);
+}
+
 async function postSetupMenu(projectRoot) {
   console.log(`
 What would you like to do next?
@@ -685,9 +795,10 @@ What would you like to do next?
   1) Review branch
   2) Open direct chat interface (local web app)
   3) Development / Analysis / others
+  4) Clean up — delete all files created by this tool (mxcli, playwright, .gitignore entries, etc.)
 `);
 
-  const answer = (await askQuestion('Select an option (1-3, press Enter to skip): ')).trim();
+  const answer = (await askQuestion('Select an option (1-4, press Enter to skip): ')).trim();
 
   switch (answer) {
     case '1':
@@ -700,11 +811,12 @@ What would you like to do next?
     case '2':
       launchChatWebApp(projectRoot);
       break;
-    case '3': {
-      const task = (await askQuestion('Describe what you want to do (Enter for a blank session): ')).trim();
-      launchClaude(projectRoot, task || null);
+    case '3':
+      log('You may close this window and continue to work in your IDE.');
       break;
-    }
+    case '4':
+      await cleanupProject(projectRoot);
+      break;
     case '':
       log('Skipping — you can run "claude" from the project folder anytime.');
       break;
@@ -720,10 +832,6 @@ async function main() {
   log(`Platform: ${os.platform()} ${os.arch()}`);
 
   const platformKey = getPlatformKey();
-
-  // olc-config.json is always created by this tool, so its absence means
-  // this project has never been set up before.
-  const isFirstRun = !fs.existsSync(path.join(projectRoot, 'olc-config.json'));
 
   const binaryPath = await installMxcli(projectRoot, platformKey);
 
@@ -750,9 +858,7 @@ async function main() {
 
   log('Setup complete!');
 
-  if (isFirstRun) {
-    await postSetupMenu(projectRoot);
-  }
+  await postSetupMenu(projectRoot);
 }
 
 main().catch(e => {
